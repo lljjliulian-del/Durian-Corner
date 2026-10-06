@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>贪吃蛇</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Microsoft YaHei", sans-serif;
+      background: #101820;
+      color: #f2f5f2;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .game {
+      width: min(100%, 520px);
+      text-align: center;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+    }
+
+    .hint {
+      color: #b7c4bd;
+      line-height: 1.6;
+    }
+
+    .score {
+      margin: 18px 0 10px;
+      font-size: 1.2rem;
+    }
+
+    canvas {
+      display: block;
+      width: min(100%, 400px);
+      height: auto;
+      margin: 0 auto;
+      border: 2px solid #49645a;
+      border-radius: 10px;
+      background: #182923;
+    }
+
+    .buttons {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 1rem;
+      color: #102018;
+      background: #a5e65a;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #c0f27f;
+    }
+
+    #status {
+      min-height: 1.5em;
+      color: #d2e6c2;
+    }
+body.light-theme {
+  background: #edf3ed;
+  color: #24382e;
+}
+
+body.light-theme .hint,
+body.light-theme #status {
+  color: #456353;
+}
+
+body.light-theme .score {
+  color: #24382e;
+}
+
+body.light-theme canvas {
+  border-color: #8ca393;
+}
+  </style>
+</head>
+<body>
+  <main class="game">
+    <h1>贪吃蛇</h1>
+    <p class="hint">使用方向键或 WASD 控制蛇，吃到食物得分。</p>
+
+    <p class="score">得分：<span id="score">0</span></p>
+
+    <canvas id="board" width="400" height="400"
+            aria-label="贪吃蛇游戏区域"></canvas>
+
+    <p id="status" aria-live="polite">点击“开始游戏”开始。</p>
+
+    <div class="buttons">
+      <button id="startButton">开始游戏</button>
+      <button id="restartButton">重新开始</button>
+      <button id="themeButton">切换主题</button>
+<button id="aiButton">AI自动玩</button>
+    </div>
+  </main>
+<script>
+  const canvas = document.getElementById("board");
+  const ctx = canvas.getContext("2d");
+
+  const cellSize = 20;
+  const gridCount = 20;
+
+  // 坐标以格子为单位：x 向右增加，y 向下增加。
+  const snake = [
+    { x: 10, y: 10 }, // 蛇头
+    { x: 9, y: 10 },
+    { x: 8, y: 10 }
+  ];
+
+  let food = { x: 15, y: 10 };
+
+  function drawBoard() {
+    ctx.fillStyle = "#182923";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 绘制网格，帮助看清每一步移动的距离。
+    ctx.strokeStyle = "#263b32";
+    ctx.lineWidth = 1;
+
+    for (let i = 0; i <= gridCount; i++) {
+      const position = i * cellSize;
+
+      ctx.beginPath();
+      ctx.moveTo(position, 0);
+      ctx.lineTo(position, canvas.height);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(0, position);
+      ctx.lineTo(canvas.width, position);
+      ctx.stroke();
+    }
+
+    // 食物。
+    ctx.fillStyle = "#ff665e";
+    ctx.fillRect(
+      food.x * cellSize + 3,
+      food.y * cellSize + 3,
+      cellSize - 6,
+      cellSize - 6
+    );
+
+    // 蛇头和蛇身。
+    snake.forEach((part, index) => {
+      ctx.fillStyle = index === 0 ? "#d2ff82" : "#8fcf58";
+      ctx.fillRect(
+        part.x * cellSize + 1,
+        part.y * cellSize + 1,
+        cellSize - 2,
+        cellSize - 2
+      );
+    });
+  }
+let score = 0;
+const scoreText = document.getElementById("score");
+
+function placeFood() {
+  let x;
+  let y;
+
+  do {
+    x = Math.floor(Math.random() * gridCount);
+    y = Math.floor(Math.random() * gridCount);
+  } while (snake.some(part => part.x === x && part.y === y));
+
+  food = { x, y };
+}
+
+  let direction = { x: 1, y: 0 };
+let timer = null;
+let aiMode = false;
+
+const aiCycle = [];
+for (let x = 0; x < gridCount; x++) {
+  aiCycle.push({ x, y: 0 });
+}
+for (let y = 1; y < gridCount; y++) {
+  if (y % 2 === 1) {
+    for (let x = gridCount - 1; x >= 1; x--) {
+      aiCycle.push({ x, y });
+    }
+  } else {
+    for (let x = 1; x < gridCount; x++) {
+      aiCycle.push({ x, y });
+    }
+  }
+}
+for (let y = gridCount - 1; y >= 1; y--) {
+  aiCycle.push({ x: 0, y });
+}
+
+const aiIndex = new Map(
+  aiCycle.map((cell, index) => [`${cell.x},${cell.y}`, index])
+);
+
+function setAIDirection() {
+  const head = snake[0];
+  const index = aiIndex.get(`${head.x},${head.y}`);
+  const next = aiCycle[(index + 1) % aiCycle.length];
+
+  direction = {
+    x: next.x - head.x,
+    y: next.y - head.y
+  };
+}
+const statusText = document.getElementById("status");
+
+document.addEventListener("keydown", (event) => {
+if (aiMode) return;
+  const directions = {
+    ArrowUp: { x: 0, y: -1 },
+    ArrowDown: { x: 0, y: 1 },
+    ArrowLeft: { x: -1, y: 0 },
+    ArrowRight: { x: 1, y: 0 },
+    w: { x: 0, y: -1 },
+    s: { x: 0, y: 1 },
+    a: { x: -1, y: 0 },
+    d: { x: 1, y: 0 }
+  };
+
+  if (directions[event.key]) {
+    direction = directions[event.key];
+  }
+});
+
+document.getElementById("startButton").addEventListener("click", () => {
+  if (timer !== null) return;
+
+  statusText.textContent = "游戏进行中";
+
+  timer = setInterval(() => {
+
+if (aiMode) {
+  setAIDirection();
+}
+const head = {
+      x: snake[0].x + direction.x,
+      y: snake[0].y + direction.y
+    };
+if (
+  head.x < 0 || head.x >= gridCount ||
+  head.y < 0 || head.y >= gridCount ||
+  snake.some(part => part.x === head.x && part.y === head.y)
+) {
+  clearInterval(timer);
+  timer = null;
+  statusText.textContent = "撞到自己或墙壁，刷新页面可重新开始";
+  return;
+}
+
+
+const ateFood = head.x === food.x && head.y === food.y;
+
+snake.unshift(head);
+
+if (ateFood) {
+  score += 1;
+  scoreText.textContent = score;
+if (aiMode && score >= 15) {
+  clearInterval(timer);
+  timer = null;
+  aiMode = false;
+  statusText.textContent = "AI 已达到 15 分，完成！";
+  drawBoard();
+  return;
+}
+  placeFood();
+} else {
+  snake.pop();
+}
+
+drawBoard();
+}, aiMode ? 20 : 180);
+});
+document.getElementById("restartButton").addEventListener("click", () => {
+  clearInterval(timer);
+  timer = null;
+aiMode = false;
+  snake.splice(
+    0,
+    snake.length,
+    { x: 10, y: 10 },
+    { x: 9, y: 10 },
+    { x: 8, y: 10 }
+  );
+
+  food = { x: 15, y: 10 };
+  score = 0;
+  scoreText.textContent = score;
+  direction = { x: 1, y: 0 };
+  statusText.textContent = "点击“开始游戏”开始。";
+
+  drawBoard();
+});
+drawBoard();
+const themeButton = document.getElementById("themeButton");
+
+if (localStorage.getItem("snakeTheme") === "light") {
+  document.body.classList.add("light-theme");
+}
+
+themeButton.addEventListener("click", () => {
+  const isLight = document.body.classList.toggle("light-theme");
+  localStorage.setItem("snakeTheme", isLight ? "light" : "dark");
+});
+document.getElementById("aiButton").addEventListener("click", () => {
+  document.getElementById("restartButton").click();
+  aiMode = true;
+  document.getElementById("startButton").click();
+});
+</script>
+</body>
+</html>
