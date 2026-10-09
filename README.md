@@ -1,4 +1,11 @@
 # Durian-Corner
+## 项目一览
+
+| 项目 | 文件 / 目录 | 说明 |
+|---|---|---|
+| 个人网站 | index.html | 用 HTML/CSS 写的个人主页，已部署到 GitHub Pages：https://lljjliulian-del.github.io/Durian-Corner/ |
+| 贪吃蛇小游戏 | snake.html | 阶段一可手动游玩；阶段二 AI 自动游玩，沿覆盖全棋盘的循环路线移动，连续吃到 15 分 |
+| 进阶挑战：PySpice 三个电路 | 进阶挑战-电路仿真/ | RC 低通滤波、戴维南定理验证、NMOS 共源放大；含手算推导、仿真波形、理论 vs 仿真对比表与误差分析 |
 
 
 
